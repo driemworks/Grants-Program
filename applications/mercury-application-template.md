@@ -8,15 +8,15 @@
 
 ### Overview
 
-Mercury is a fully decentralized data management solution which adds additional functionality and structure to a private IPFS cluster by leveraging Substrate. Our initial use case will be to construct a fully decentralized pinning service. Current solutions for decentralized storage are either lacking in security and privacy or rely on some centralized service. To illustrate this point, consider how the usage of a pinning services (e.g. Piñata) necessitates centralization, since the ipfs cluster in use is behind a centralized API and paywall, or how Textile de-decentralizes Filecoin. A fully decentralized approach provides individuals a platform without the risks associated with centralized APIs, along with the opportunity to profit from their passive storage. In addition to the benefits of decentralization, the modularity and upgradeability provided with substrate would allow us to easily account for API changes or library upgrades. We propose a *decentralized pinning service*, facilitating an ecosystem that:
+Mercury is a fully decentralized data management solution which adds additional functionality and structure to a private IPFS cluster by leveraging Substrate. Our initial use case will be to construct a fully decentralized pinning service. Current solutions for decentralized storage are either lacking in security and privacy or rely on some centralized service. To illustrate this point, consider how the usage of a pinning service (such as Piñata) necessitates centralization, since the ipfs cluster in use is behind a centralized API and paywall, or how Textile de-decentralizes Filecoin. A fully decentralized approach provides individuals a platform without the risks associated with centralized APIs and the additional opportunity to profit from their passive storage. In addition to the benefits of decentralization, the modularity and upgradeability provided with substrate would allow us to easily account for API changes or library upgrades. We propose a *decentralized pinning service*, facilitating an ecosystem that:
 * incentivizes and rewards nodes to provide off-chain storage
 * provides on-chain governance and moderation
-* allows for highly resilient, available, and cost efficient data storage and delivery <- bold claims ...
+* more control over your data and the ability to store and share private data
 
  There are various real world benefits resulting from this approach. IPFS provides a more resilient and efficient way to access data. Not only does it provide more cost efficient storage and hosting, but also more cost efficient access, as there is no third party that acts as platform owner and maintainer. Transparent governance and moderation is also easily achievable with this approach. We also provide a means of passive income for storage providers. Content creators also benefit from a higher degree of freedom, means of support/funding, etc., but also a higher degree of accountability and traceability.
 
 ### Project Details
-Mercury expands on [previous work](https://github.com/rs-ipfs/substrate) which laid the groundwork for IPFS integration with substrate and the runtime module which will be our initial focus. The goal of this proposal is to build a fully decentralized pinning service along with a youtube-like sample user interface. We will accomplish this by introducing new runtime modules that allow nodes to request data from other nodes outside of IPFS, building an offchain-worker to handle data encryption/decryption, developing a reward distribution scheme for nodes providing storage (via pinning content in ipfs), and constructing a system through which new nodes can securely join the private ipfs network.
+Mercury expands on [previous work](https://github.com/rs-ipfs/substrate) which laid the groundwork for IPFS integration with substrate and the runtime module which will be our initial focus. The goal of this proposal is to build a fully decentralized pinning service along with a sample user interface. We will accomplish this by introducing new runtime modules that allow nodes to request data from other nodes outside of IPFS, building an offchain-worker to handle data encryption/decryption, developing a reward distribution scheme for nodes providing storage (via pinning content in ipfs), and constructing a system through which new nodes can securely join the private ipfs network.
 
 We will accomplish this by using a collection of requests that are fulfilled by offchain workers. From a 30,000 foot view of this project, there will be four separate queues that nodes can send requests to.
 
@@ -90,18 +90,22 @@ Suppose a node has some data, D. To add the data to the private IPFS network it 
 
 A **subscribable** is an entry in a StorageMap which maps an ipns address to a collection of addresses which are all 'subscribed' to the ipns address. A subscribable has an associated owner address and a collection of CIDs which are accessible given you are a subscriber. A subscribable is the first view a consumer has of your data and so contains (filename, type, description). A subscribable can also dictate the price and terms of subscription, and can be expanded to have a more dynamic ruleset, however we will delegate this discussion to the [future plans](#future-plans).
 
-A subscribable also forms the basis for allowing peers to pin your content. When defining a subscribable, an owner also defines a maximum storage fee in TOKEN/kb/epoch_blocks, where TOKEN is a TBD token and epoch_blocks is some number of blocks. Let's break this down step by step:
+A subscribable also forms the basis for allowing peers to pin your content. Any peer can pin any content if they choose to without limitation. However, we also want to allow nodes to reserve storage as well. When defining a subscribable, an owner can also define a storage contract, in which they specify a maximum storage fee in TOKEN/kb/epoch_blocks, where TOKEN is a TBD token and epoch_blocks is some number of blocks. They then reserve some amount of tokens, `R`, which any node that agrees to the contract extracts from. Let's break this down step by step:
 
-Suppose a node has an `X kb` file that they've added to IPFS and they agree to pin their file for a max of `M TOK/kb/epoch`, where `epoch = B blocks`. Then the maximum fee paid per epoch by the owner is `M * X * B TOK`. The owner pays the pinning node each epoch, as long as it is pinned for the entire epoch. A subscribable also limits the maximum number of storage nodes that can store the content. 
+Suppose a node has an `X kb` file that they've added to IPFS and they agree to pin their file for a max of `M TOK/kb/epoch`, where `epoch = B blocks`. Then the maximum fee paid per epoch by the owner is `M * X * B TOK`, for at least `R/(M * X * B) epochs`, or `R/(M * X) blocks`. The owner pays the pinning node each epoch, as long as it is pinned for the entire epoch. A storage contract also limits the maximum number of storage nodes that can store the content. 
 
 ##### Data Access Auth and Retrieval
-Data retrieval directly from IPFS will not be available. Instead, to retreive a CID `C` a node will invoke a `REQUEST_DATA` extrinsic, which will add a request to a queue. A node that has `C` pinned will pick up the request and verify that the user has access to the content. 
+Data retrieval directly from IPFS will not be available by read only nodes. Instead, to retreive a CID `C` a node will invoke a `REQUEST_DATA` extrinsic, which will add a request to a queue. A node that has `C` pinned will pick up the request and verify that the user has access to the content (is a subscriber, or content it open to all). We will then leverage libp2p to send the data to the requesting user. The requesting node will send a maximum network fee to retrieve the content, which is then rewarded to the node that delivered it. (note: this is another incentive for nodes to pin data in high demand).
+
+We want to allow nodes to upload private data in order to build a data marketplace on top of the storage marketplace. To access private data a node will need to meet the conditions defined in the subscribable. When the conditions are met, the node's address is added to the `subscription request queue`. The owner node then encrypts a message containing the private key required to decrypt the subscribable using the consumer's public key. The consumer is added as a subscriber and can decrypt the message when retrieved.
 
 ##### Fee Distribution to Storage Providers
-Firstly, storage providers will need a way to view/navigate/search `pin requests`. They will then be able to accept the request. When this happens, they pin the file. When they pin the file they are automatically "added to the pool". We will add a mechanism so that we can purge offline nodes from the pool (and avoid sending them any rewards). When the owner created the request she specified a maximum rate, max<sub>rate</sub> TOK/kb/sec and a pool reward distribution blocks min<sub>hold</sub> specifying the epoch time in blocks. That is, each time min<sub>hold</sub> blocks are finalized, rewards are distributed to nodes that participated during that epoch (starting from when the pin request is created). 
+Nodes that agree to pin a CID do so individually. Nodes should be able to freely pin any content that they want to.
 
 ##### Governance
 A problem inherent to decentralization is abuse of the privacy and security offered by the technology. For example, if the platform is used to host illegal content, or mislabeled content, or malicious content, then we need to be able to anticipate, identify, and purge this content and associated nodes from the network.
+
+We cannot remove data from somebody's private, local storage. However, we can implement a mechanism that blocks that address from delivering or fetching a CID.
 
 #### What it is not
 * Data stored is immutable but not indefinitely *persistent*. That is, your data will only be ensured to be available as long as there is incentive for a pool to hold it. Pinning in this context is still subject to the limitations outlined here: **https://docs.ipfs.io/concepts/persistence/**.
@@ -114,14 +118,14 @@ Help us locate your project in the Polkadot/Substrate/Kusama landscape and what 
   * This project greatly expands on off-chain storage solutions for blockchains.
 * Who is your target audience (parachain/dapp/wallet/UI developers, designers, your own user base, some dapp's userbase, yourself)?
   * 1) Developers
-    * Developers can safely store their data in a decentralized way
+    * App developers can benefit from decentralized storage for many reason already mentioned earlier. DApp developers specifically can benefit being able to apply rules on top of raw storage.
   * 2) My own user base
-    * a) content creators
-    * b) storage providers
-    * c) content consumers
+    * a) content creators: Content creators receive support directly from consumers. They do not need to relinquish their data to a third party to do so.
+    * b) storage providers: Storage providers can profit from their passive storage.
+    * c) content consumers: Consumers will not have to alter their behavior in terms of the way they access content, though interaction could change in the future.
 * What need(s) does your project meet?
   * The project expands on current off-chain storage capabilities with IPFS. It will enable incentive for nodes to provide storage and pin data, as well as provide low-cost ways for consumers to support creators and for creators to sell content and affordably host it.
-  * Fair and transparent governance will do away with the obfuscatory and totalitarian moderation done on today's centralized platforms. Was that a little too harsh?
+  * Fair and transparent governance will do away with the obfuscatory and totalitarian moderation done on today's centralized platforms.
 * Are there any other projects similar to yours in the Substrate / Polkadot / Kusama ecosystem?
   * If so, how is your project different?
     * Yes: We build on: https://github.com/rs-ipfs/substrate
@@ -147,7 +151,7 @@ Help us locate your project in the Polkadot/Substrate/Kusama landscape and what 
 
 * **Contact Name:** Tony Riemer
 * **Contact Email:** tonyrriemer@gmail.com
-* **Website:** TPDP
+* **Website:**
 
 ### Legal Structure
 
