@@ -8,7 +8,7 @@
 
 ### Overview
 
-Mercury is a fully decentralized data management solution adding additional functionality and structure to a private IPFS network through Substrate. Our initial use case is a fully decentralized pinning service. Current solutions for decentralized storage are either lacking in security and privacy or rely on some centralized service to account for it. To illustrate this point, consider how IPFS makes your data available to any peer, the usage of a pinning service (such as Piñata) necessitates centralization, since the ipfs cluster in use is behind a centralized API and paywall, or how Textile de-decentralizes Filecoin. A fully decentralized approach provides individuals a platform without the risks associated with centralized APIs and also the opportunity to profit from their passive storage. In addition to the benefits of decentralization, the modularity and upgradeability provided with substrate would allow us to easily account for API changes or library upgrades. We propose a *decentralized pinning service*, facilitating an ecosystem that:
+Mercury is a fully decentralized data management solution, adding additional functionality and structure to a private IPFS network through Substrate. Our initial use case is a fully decentralized pinning service. Current solutions for decentralized storage are either lacking in security and privacy or rely on some centralized service to account for it. To illustrate this point, consider how IPFS makes your data available to any peer, the usage of a pinning service (such as Piñata) necessitates centralization, since the ipfs cluster in use is behind a centralized API and paywall, or how Textile de-decentralizes Filecoin. A fully decentralized approach provides individuals a platform without the risks associated with centralized APIs and also the opportunity to profit from their passive storage. In addition to the benefits of decentralization, the modularity and upgradeability provided with substrate would allow us to easily account for API changes or library upgrades. We propose a *decentralized pinning service*, facilitating an ecosystem that:
 
 * incentivizes and rewards nodes to provide off-chain storage
 * provides on-chain governance and moderation
@@ -26,7 +26,9 @@ We accomplish this by building a permissioned, indexable layer on top of a priva
 
 A simple use case would look like this. In the diagram below, I have included a "ledger" box to indicate that each node type will make both read and write operations to the ledger. In this schema, a node [adds data](#adding-data) to the private IPFS network along with publishing the file data and some condition to access the file, for now let's say some amount of a token. A `storage node` provides their storage rates to the network. An owner can [request storage](#providing-storage) from the storage node, which if accepted, means the storage node agrees to pin the file. The `consumer` node can then purchase access rights to the content from the owner and retrieve it from the storage provider.
 
-![basic use case](../src/resources/basic_use_case.png)
+<div style="text-align:center">
+  <img src="../src/resources/basic_use_case.png" />
+</div>
 
 ##### The Private Network
 We ensure that membership of the IPFS network is synchronized with the blockchain by defining a static set of nodes and encoding them in the genesis block.
@@ -40,22 +42,30 @@ To join the network, a node invokes some extrinsic that initiates the process to
    2) decrypt m<sub>0</sub>, the encrypted swarm.key, with priv<sub>ephem</sub>.
    3) connect to the private cluster by injecting swarm.key into ipfs.
 
-![authentication](../src/resources/cluster_access.png)
+<div style="text-align:center">
+  <img src="../src/resources/cluster_access.png" />
+</div>
 
 ##### Adding Data
 
 To add data to the network, a node provides an encoded file data (as a byte array) along with the file name, file extension, file size and description. We encode this along with the account id, current timestamp, and CID (associated with the data) to build a full record of content in the network. We can expand on this to let the owner specify conditions for nodes to be able to access the content, such as the transfer of some amount of tokens (more on this [here](#accessing-and-retrieving-data)). 
 
-![basic data flow](../src/resources/owner_simple.png)
+<div style="text-align:center">
+  <img src="../src/resources/owner_simple.png" />
+</div>
 
-**Future Development:** We can incorporate validations prior to adding the data to the private IPFS network in order to verify the content is not illicit/illegal, not a virus, etc. with an OCW, but for now we will perform no validations.
+**Future Development:** 
+- allow nodes to associate similar metadata to IPNS records and control access to them
+- incorporate validations prior to adding the data to the private IPFS network in order to verify the content is not illicit/illegal, not a virus, etc. but for now we will perform no validations.
 
 ##### Accessing and Retrieving Data
-Nodes can reference the blockchain to see what data is available in IPFS along with who has the file pinned and who is online. With this the node can see which data is currently available. 
+Nodes can reference the blockchain to see what data is available in IPFS along with who has the file pinned and a node's status (offline or online).
 
 We add a validation before we call IPFS to check if the origin (calling node) is authorized to access the data. If authorized, the call to retrieve it from IPFS proceeds, otherwise an error will occur.
 
-![consumer_node](../src/resources/consumer_node.png)
+<div style="text-align:center">
+  <img src="../src/resources/consumer_node.png" />
+</div>
 
 ##### Providing Storage 
 Nodes are able to pin any content that is available in the network without the requirement that another node offers them payment through the process outlined below:
@@ -66,33 +76,35 @@ A problem with a decentralized system is availability. Adding a file to the netw
 1) nodes who have pinned `C`
 2) nodes who are online
 
-We will refer to this group of nodes as the **storage provider pool for C**, or pool<sub>C</sub> for short.
+We will refer to this group of nodes as the **storage provider pool for C**.
 
 Owner nodes then will send a `request` to a candidate storage node, specifying a desired rate R tokens/gb/sec, reference to the object (tx hash of tx containing the file metadata from earlier), reward distribution epoch blocks (the number of blocks that the node must hold the file for to get a reward).
 
-This can probably lead to some interesting economic analyses? For example, if you agree to some really high rate and have some long term storage and then the price of the token (in relation to fiat) increases, then you will end up paying a large sum of money for storage. Contrary to this, if a node agrees to some low long term rate and the price drops, they may not profit much. 
+This can lead to some interesting economic decisions. For example, if you agree to some really high rate and have some long term storage and then the price of the token (in relation to fiat) increases, then you will end up paying a large sum of money for storage. Contrary to this, if a node agrees to some low long term rate and the price drops, they may not profit much. 
 
 ##### Governance
-A problem inherent to decentralization is abuse of the privacy and security offered by the technology. For example, if the platform is used to host illegal content, or mislabeled content, or malicious content, then we need to be able to anticipate, identify, and purge this content and associated nodes from the network. We need multiple levels of authority to be involved here. Some things that we want to keep in mind:
-- we cannot rely on community-driven moderation only
-- will have a set of "supreme nodes" that are responsible for taking action against flagged content or nodes. 
+A problem inherent to decentralization is abuse of the technology. If the platform is used to host illegal content, mislabeled, or malicious content, then we need to be able to anticipate, identify, and block or purge this content and associated nodes from the network. The implication here is that we need to be able to define different roles for nodes within the blockchain, with their own permissions and authorities. For now, we will only have two roles: "governor" and "not-governor". Nodes who are "governors" will be static and encoded in the genesis node. These nodes will have the ability to add a CID or address to some globally accessible collection. When nodes try to interact with the blockchain, they always reference this list first. For example, when asking a node to pin data the check is made that: 1) the node you're requesting is not blocked and 2) the CID you have is not blocked. Similarly, for the pinning node, they must check that the requesting node is 1) not blocked and 2) the CID requested to be pinned is not blocked.
 
 #### What it is not
-* Data stored is immutable but not indefinitely *persistent*. Data is still subject to the limitations outlined here: **https://docs.ipfs.io/concepts/persistence/**.
+* Data stored is immutable but not indefinitely *persistent*. It is not automatically replicated. Data is still subject to the limitations outlined here: **https://docs.ipfs.io/concepts/persistence/**.
 
 ### Ecosystem Fit
 
 Help us locate your project in the Polkadot/Substrate/Kusama landscape and what problems it tries to solve by answering each of these questions:
 
 * Where and how does your project fit into the ecosystem?
-  * This project greatly expands on off-chain storage solutions for blockchains.
+  
 * Who is your target audience (parachain/dapp/wallet/UI developers, designers, your own user base, some dapp's userbase, yourself)?
   * 1) Developers
-    * App developers can benefit from decentralized storage for many reason already mentioned earlier. DApp developers specifically can benefit being able to apply rules on top of raw storage.
+    * App developers can benefit from decentralized storage.
+      * hosting static sites
+      * hosting content and other resources
+      * control access to owned data
+      * benefit from decentralization without losing the good things that come with centralization
   * 2) My own user base
     * a) content creators: Content creators receive support directly from consumers. They do not need to relinquish their data to a third party to do so.
     * b) storage providers: Storage providers can profit from their passive storage.
-    * c) content consumers: Consumers will not have to alter their behavior in terms of the way they access content, though interaction could change in the future.
+    * c) content consumers: Consumers will not have to alter their behavior in terms of the way they access content, though interaction could change in the future. Consumers can access content without the stipulation of providing their private data to a third party. 
 * What need(s) does your project meet?
   * The project expands on current off-chain storage capabilities with IPFS. It will enable incentive for nodes to provide storage and pin data, as well as provide low-cost ways for consumers to support creators and for creators to sell content and affordably host it.
   * Fair and transparent governance will do away with the obfuscatory and totalitarian moderation done on today's centralized platforms.
@@ -100,6 +112,7 @@ Help us locate your project in the Polkadot/Substrate/Kusama landscape and what 
   * If so, how is your project different?
     * Yes: We build on: https://github.com/rs-ipfs/substrate
   * If not, are there similar projects in related ecosystems?
+    * Within the substrate/kusama ecosystem I am not aware of any similar projects. Within the context of "Decentralized storage" there are several other already well established options through pinning services, public and private gateways, and blockchain-based storage, technologies such as: Textile, Piñata, Infura, and Filecoin. 
     * Yes:
       * Pinning services (like Piñata)
         * pinning services are not fully decentralized
@@ -112,16 +125,13 @@ Help us locate your project in the Polkadot/Substrate/Kusama landscape and what 
 
 ### Team members
 
-* Name of team leader
-  * Tony Riemer 
-* Names of team members
-  * TBD
+* Tony Riemer
 
 ### Contact
 
 * **Contact Name:** Tony Riemer
 * **Contact Email:** tonyrriemer@gmail.com
-* **Website:**
+* **Website:** TBD
 
 ### Legal Structure
 
@@ -150,13 +160,7 @@ https://www.linkedin.com/in/tony-riemer/
 
 ## Development Status :open_book:
 
-If you've already started implementing your project or it is part of a larger repository, please provide a link and a description of the code here. In any case, please provide some documentation on the research and other work you have conducted before applying. This could be:
-
-* links to improvement proposals or [RFPs](https://github.com/w3f/Grants-Program/tree/master/rfp-proposal) (requests for proposal),
-* academic publications relevant to the problem,
-* links to your research diary, blog posts, articles, forum discussions or open GitHub issues,
-* references to conversations you might have had related to this project with anyone from the Web3 Foundation,
-* previous interface iterations, such as mock-ups and wireframes.
+Development on this proposal is already in the very early stages of setting up the repositories and any needed configurations. Please reference the github repositories above. 
 
 ## Development Roadmap :nut_and_bolt:
 
@@ -164,16 +168,17 @@ If you've already started implementing your project or it is part of a larger re
 
 * **Total Estimated Duration:** 3.5 months
 * **Full-Time Equivalent (FTE):**  1 FTE
-* **Total Costs:** $10,000 USD
+* **Total Costs:** 10,000 DAI
 
-I have designed each milestone to provide a functioning product at the end of each one.
-Initially, we will leverage substrate to create an "indexable" private ipfs network. 
-
-### Milestone 1 — Implement Substrate Modules
+### Milestone 1 — Indexable IPFS
 Milestone 1 Goal:
-  The outcome of the first milestone is to create an permissioned, indexable private ipfs network. That is, an IPFS network where we can search for files in a similar way as a standard file stystem, apply permissions, etc. We do this by creating a private IPFS network with a finite number of nodes and encode this membership within the genesis block. Then we encode file metadata within the blockchain for each piece of data added to IPFS by a node.  We will build a decentralized blog user interface that lets users search, view, upload and download data. 
+  The outcome of the first milestone is to create an permissioned, indexable private ipfs network. That is, an IPFS network where we can search for files in a similar way as a standard file stystem, apply permissions, etc. We do this by creating a private IPFS network with a finite number of nodes and encode this membership within the genesis block. Then we encode file metadata within the blockchain for each piece of data added to IPFS by a node.  We will build a decentralized blog user interface that lets users search, view, upload and download data.
 
-![milestone1_diagram](../src/resources/v0.0.png)
+  Tracking on clickup: https://app.clickup.com/18012592/v/l/s/30032093 
+
+<div style="text-align:center">
+  <img src="../src/resources/v0.0.png" />
+</div>
 
 * **Estimated duration:** 4 Weeks
 * **FTE:**  1
@@ -191,11 +196,12 @@ Milestone 1 Goal:
 | 3. | Build App | Build the main application that bundles IPFS and substrate |
 | 4. | User Interface | We will build a minimal user interface to allow users to interact with their nodes. This will be done with react and polkadot.js. This initial phase will be mostly setup. We will provide a **view** for users to view file metadata, to **add** data to their ipfs node, to **view** their cached data , and to **retrieve** files based on the file metadata available. |
 
-### Milestone 2 — Additional features
+### Milestone 2 — Permissioned IPFS
+
 Milestone 2 Goal: 
-  The second milestone delivers a mechanism to enable the pinning service. Here we:
+  The second milestone delivers a mechanism to enable "file owners" to control access to their data.  Here we:
   - build the tools needed to let new nodes join the private IPFS network.
-  - 
+  - allow for controlling access to data
 
 * **Estimated Duration:** 4 weeks 
 * **FTE:**  1
@@ -211,11 +217,15 @@ Milestone 2 Goal:
 | 1.  | | | 
 | 2. | | |
 
-### Milestone 3 — Additional features
+### Milestone 3 — Decentralized Pinning Service
 
 * **Estimated Duration:** 4 weeks 
 * **FTE:**  1
 * **Costs:** 3000 DAI
+
+<div style="text-align:center">
+  <img src="../src/resources/milestone_three.png" />
+</div>
 
 | Number | Deliverable | Specification |
 | -----: | ----------- | ------------- |
